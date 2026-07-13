@@ -130,6 +130,22 @@
   .empty { padding: 60px 20px; text-align: center; color: var(--muted); font-family: var(--mono); font-size: 13px; }
   .empty b { color: var(--text); }
 
+  .morebar {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 12px; flex-wrap: wrap;
+    margin-top: 12px; padding: 0 4px;
+    font-family: var(--mono); font-size: 12px; color: var(--muted);
+  }
+  .morebar b { color: var(--text); font-weight: 600; }
+  .morebar:empty { display: none; }
+  #toggleAll {
+    font-family: var(--mono); font-size: 12px;
+    background: var(--panel-2); color: var(--text);
+    border: 1px solid var(--line); border-radius: 7px;
+    padding: 6px 12px; cursor: pointer;
+  }
+  #toggleAll:hover { border-color: var(--accent); }
+
   footer { margin-top: 22px; font-family: var(--mono); font-size: 11px; color: var(--muted); text-align: center; }
   footer a { color: var(--accent); text-decoration: none; }
 
@@ -168,6 +184,8 @@
     <div id="rows"><div class="empty">Loading…</div></div>
   </div>
 
+  <div class="morebar" id="more"></div>
+
   <footer>
     Free public proxies — use at your own risk, never for sensitive traffic.
     Data: <a href="data/proxies.json">proxies.json</a>
@@ -176,7 +194,8 @@
 
 <script>
 const DATA_URL = "data/proxies.json";
-let ALL = [], proto = "all", query = "";
+const PAGE_SIZE = 200;                 // render only the fastest N by default
+let ALL = [], proto = "all", query = "", showAll = false;
 
 // teal (fast) -> amber -> red (slow), by latency in ms
 function latColor(ms) {
@@ -200,13 +219,21 @@ function render() {
     (proto === "all" || p.protocol === proto) &&
     (!query || (p.host + ":" + p.port).includes(query))
   );
+  const more = document.getElementById("more");
   if (!list.length) {
     rows.innerHTML = `<div class="empty">${ALL.length
       ? "No proxies match this filter."
       : "<b>No live proxies yet.</b><br>The first scan runs after you push and enable Actions."}</div>`;
+    more.innerHTML = "";
     return;
   }
-  rows.innerHTML = list.map(p => {
+  const shown = showAll ? list : list.slice(0, PAGE_SIZE);
+  const hidden = list.length - shown.length;
+  more.innerHTML = list.length > PAGE_SIZE
+    ? `<span>showing fastest <b>${shown.length}</b> of <b>${list.length}</b></span>
+       <button id="toggleAll">${showAll ? "show fewer" : `show all (${hidden} more)`}</button>`
+    : `<span>showing all <b>${list.length}</b></span>`;
+  rows.innerHTML = shown.map(p => {
     const c = latColor(p.latency_ms);
     const addr = esc(p.host + ":" + p.port);
     const up = p.uptime >= 90 ? "#2dd4bf" : p.uptime >= 50 ? "#fbbf24" : "#f87171";
@@ -238,11 +265,16 @@ async function load() {
 
 document.getElementById("protoSeg").addEventListener("click", e => {
   const b = e.target.closest("button"); if (!b) return;
-  proto = b.dataset.p;
+  proto = b.dataset.p; showAll = false;
   [...e.currentTarget.children].forEach(x => x.classList.toggle("on", x === b));
   render();
 });
-document.getElementById("q").addEventListener("input", e => { query = e.target.value.trim(); render(); });
+document.getElementById("q").addEventListener("input", e => { query = e.target.value.trim(); showAll = false; render(); });
+document.getElementById("more").addEventListener("click", e => {
+  if (e.target.id !== "toggleAll") return;
+  showAll = !showAll;
+  render();
+});
 document.getElementById("rows").addEventListener("click", e => {
   const b = e.target.closest(".copy"); if (!b) return;
   navigator.clipboard.writeText(b.dataset.a);
