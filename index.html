@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Proxy Latency Board</title>
+<style>
+  :root {
+    --bg:        #0a0f1a;
+    --panel:     #111827;
+    --panel-2:   #0d1420;
+    --line:      #1f2a3a;
+    --text:      #e8edf4;
+    --muted:     #6b7a90;
+    --accent:    #5eb3ff;
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Code", Menlo, monospace;
+    --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    padding: 28px 20px 80px;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; }
+
+  /* ---- header ---- */
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 10px;
+  }
+  h1 {
+    font-size: 30px;
+    font-weight: 650;
+    letter-spacing: -0.02em;
+    margin: 0 0 6px;
+  }
+  .status {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    color: var(--muted);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 18px;
+    align-items: center;
+  }
+  .status b { color: var(--text); font-weight: 600; }
+  .dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: #2dd4bf; display: inline-block;
+    box-shadow: 0 0 0 0 rgba(45,212,191,.6);
+    animation: pulse 2.2s infinite;
+  }
+  @keyframes pulse {
+    0%   { box-shadow: 0 0 0 0 rgba(45,212,191,.5); }
+    70%  { box-shadow: 0 0 0 7px rgba(45,212,191,0); }
+    100% { box-shadow: 0 0 0 0 rgba(45,212,191,0); }
+  }
+
+  /* ---- controls ---- */
+  .controls {
+    display: flex; flex-wrap: wrap; gap: 10px;
+    margin: 26px 0 14px;
+    align-items: center;
+  }
+  .seg { display: flex; background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .seg button {
+    font-family: var(--mono); font-size: 12px;
+    background: transparent; color: var(--muted);
+    border: 0; padding: 8px 13px; cursor: pointer;
+    border-right: 1px solid var(--line);
+  }
+  .seg button:last-child { border-right: 0; }
+  .seg button.on { background: var(--panel); color: var(--text); }
+  .seg button:hover:not(.on) { color: var(--text); }
+  input[type=search] {
+    flex: 1; min-width: 160px;
+    font-family: var(--mono); font-size: 13px;
+    background: var(--panel-2); color: var(--text);
+    border: 1px solid var(--line); border-radius: 8px;
+    padding: 8px 12px; outline: none;
+  }
+  input[type=search]:focus { border-color: var(--accent); }
+  .refresh { font-family: var(--mono); font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 7px; cursor: pointer; user-select: none; }
+  .refresh input { accent-color: var(--accent); }
+
+  /* ---- table ---- */
+  .board { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--panel-2); }
+  .row {
+    display: grid;
+    grid-template-columns: 92px 1fr 74px 90px 60px 40px;
+    align-items: center;
+    gap: 12px;
+    padding: 11px 16px 11px 13px;
+    border-bottom: 1px solid var(--line);
+    border-left: 3px solid transparent;
+  }
+  .row:last-child { border-bottom: 0; }
+  .row.head {
+    font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--muted);
+    background: var(--panel); padding-top: 10px; padding-bottom: 10px;
+  }
+  .row.data:hover { background: var(--panel); }
+
+  .lat { font-family: var(--mono); font-weight: 600; font-size: 13px; display: flex; align-items: baseline; gap: 3px; }
+  .lat .u { font-size: 10px; color: var(--muted); font-weight: 400; }
+  .addr { font-family: var(--mono); font-size: 13px; color: var(--text); overflow: hidden; text-overflow: ellipsis; }
+  .proto { font-family: var(--mono); font-size: 11px; color: var(--muted); text-transform: uppercase; }
+  .up { font-family: var(--mono); font-size: 12px; }
+  .chk { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+  .copy {
+    font-family: var(--mono); font-size: 11px;
+    background: transparent; color: var(--muted);
+    border: 1px solid var(--line); border-radius: 6px;
+    padding: 4px 6px; cursor: pointer; justify-self: end;
+  }
+  .copy:hover { color: var(--text); border-color: var(--accent); }
+  .copy.done { color: #2dd4bf; border-color: #2dd4bf; }
+
+  .empty { padding: 60px 20px; text-align: center; color: var(--muted); font-family: var(--mono); font-size: 13px; }
+  .empty b { color: var(--text); }
+
+  footer { margin-top: 22px; font-family: var(--mono); font-size: 11px; color: var(--muted); text-align: center; }
+  footer a { color: var(--accent); text-decoration: none; }
+
+  @media (max-width: 640px) {
+    .row { grid-template-columns: 74px 1fr 56px 34px; gap: 9px; }
+    .col-up, .col-chk { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="eyebrow">Live · rechecked every ~10 min</div>
+  <h1>Proxy Latency Board</h1>
+  <div class="status">
+    <span><span class="dot"></span> <b id="count">—</b> alive</span>
+    <span>updated <b id="ago">—</b></span>
+    <span>scan took <b id="took">—</b>s</span>
+  </div>
+
+  <div class="controls">
+    <div class="seg" id="protoSeg">
+      <button data-p="all" class="on">all</button>
+      <button data-p="http">http</button>
+      <button data-p="socks4">socks4</button>
+      <button data-p="socks5">socks5</button>
+    </div>
+    <input type="search" id="q" placeholder="filter by ip, port…" autocomplete="off">
+    <label class="refresh"><input type="checkbox" id="auto" checked> auto</label>
+  </div>
+
+  <div class="board" id="board">
+    <div class="row head">
+      <div>latency</div><div>address</div><div>proto</div>
+      <div class="col-up">uptime</div><div class="col-chk">checks</div><div></div>
+    </div>
+    <div id="rows"><div class="empty">Loading…</div></div>
+  </div>
+
+  <footer>
+    Free public proxies — use at your own risk, never for sensitive traffic.
+    Data: <a href="data/proxies.json">proxies.json</a>
+  </footer>
+</div>
+
+<script>
+const DATA_URL = "data/proxies.json";
+let ALL = [], proto = "all", query = "";
+
+// teal (fast) -> amber -> red (slow), by latency in ms
+function latColor(ms) {
+  const stops = [[0,"#2dd4bf"],[300,"#4ade80"],[700,"#fbbf24"],[1500,"#fb923c"],[3000,"#f87171"]];
+  for (let i = stops.length - 1; i >= 0; i--) if (ms >= stops[i][0]) return stops[i][1];
+  return stops[0][1];
+}
+function ago(iso) {
+  if (!iso) return "never";
+  const s = Math.max(0, (Date.now() - new Date(iso)) / 1000);
+  if (s < 60) return Math.floor(s) + "s ago";
+  if (s < 3600) return Math.floor(s/60) + "m ago";
+  if (s < 86400) return Math.floor(s/3600) + "h ago";
+  return Math.floor(s/86400) + "d ago";
+}
+function esc(s){ return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+function render() {
+  const rows = document.getElementById("rows");
+  const list = ALL.filter(p =>
+    (proto === "all" || p.protocol === proto) &&
+    (!query || (p.host + ":" + p.port).includes(query))
+  );
+  if (!list.length) {
+    rows.innerHTML = `<div class="empty">${ALL.length
+      ? "No proxies match this filter."
+      : "<b>No live proxies yet.</b><br>The first scan runs after you push and enable Actions."}</div>`;
+    return;
+  }
+  rows.innerHTML = list.map(p => {
+    const c = latColor(p.latency_ms);
+    const addr = esc(p.host + ":" + p.port);
+    const up = p.uptime >= 90 ? "#2dd4bf" : p.uptime >= 50 ? "#fbbf24" : "#f87171";
+    return `<div class="row data" style="border-left-color:${c}">
+      <div class="lat" style="color:${c}">${p.latency_ms}<span class="u">ms</span></div>
+      <div class="addr">${addr}</div>
+      <div class="proto">${esc(p.protocol)}</div>
+      <div class="up col-up" style="color:${up}">${p.uptime}%</div>
+      <div class="chk col-chk">${p.checks}</div>
+      <button class="copy" data-a="${addr}">copy</button>
+    </div>`;
+  }).join("");
+}
+
+async function load() {
+  try {
+    const r = await fetch(DATA_URL + "?t=" + Date.now(), { cache: "no-store" });
+    const d = await r.json();
+    ALL = d.proxies || [];
+    document.getElementById("count").textContent = d.count ?? ALL.length;
+    document.getElementById("ago").textContent = ago(d.updated);
+    document.getElementById("took").textContent = d.took_seconds ?? "—";
+    render();
+  } catch (e) {
+    document.getElementById("rows").innerHTML =
+      `<div class="empty">Couldn't load data. <b>${esc(e.message)}</b></div>`;
+  }
+}
+
+document.getElementById("protoSeg").addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return;
+  proto = b.dataset.p;
+  [...e.currentTarget.children].forEach(x => x.classList.toggle("on", x === b));
+  render();
+});
+document.getElementById("q").addEventListener("input", e => { query = e.target.value.trim(); render(); });
+document.getElementById("rows").addEventListener("click", e => {
+  const b = e.target.closest(".copy"); if (!b) return;
+  navigator.clipboard.writeText(b.dataset.a);
+  b.textContent = "✓"; b.classList.add("done");
+  setTimeout(() => { b.textContent = "copy"; b.classList.remove("done"); }, 1200);
+});
+
+let timer = setInterval(() => document.getElementById("auto").checked && load(), 60000);
+document.getElementById("auto").addEventListener("change", load);
+load();
+</script>
+</body>
+</html>
